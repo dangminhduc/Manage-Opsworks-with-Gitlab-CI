@@ -1,0 +1,72 @@
+stages:
+  - code-review
+  - test
+  - build and deploy
+
+variables:
+  # You may put it in gitlab secrete variables 
+  APP_NAME: "xxxxxxxx" #Staging application name from Opsworks console
+  #STG parameter
+  STG_S3_WAR_FOLDER: "s3://java-app/stg/" # use the same path with which you set in Opsworks console
+  STG_STACK_ID: "xxxxxxxxx" #Staging stack ID from Opsworks console
+  STG_LAYER_ID: "xxxxxxxxxxxx" #Staging layer ID
+  STG_APP_ID : "xxxxxxxxx" #Staging application ID from Opsworks console
+  
+  #PROD parameter
+  PROD_S3_WAR_FOLDER: "s3://java-app/prod/"
+  PROD_STACK_ID: "xxxxxxxxx" #Production stack ID from Opsworks console
+  PROD_LAYER_ID: "xxxxxxxxxxxx" #Production layer ID
+  PROD_APP_ID : "xxxxxxxxx" #Production application ID from Opsworks console
+
+code review:
+  image: docker:latest
+  stage: code-review
+  variables:
+    DOCKER_DRIVER: overlay
+  services:
+    - docker:dind
+  script:
+    - docker info
+    - docker pull codeclimate/codeclimate
+    - docker run --env CODECLIMATE_CODE="$PWD" --volume "$PWD":/code --volume /var/run/docker.sock:/var/run/docker.sock --volume /tmp/cc:/tmp/cc codeclimate/codeclimate:0.69.0 init
+    - docker run --env CODECLIMATE_CODE="$PWD" --volume "$PWD":/code --volume /var/run/docker.sock:/var/run/docker.sock --volume /tmp/cc:/tmp/cc codeclimate/codeclimate:0.69.0 analyze -f json > codeclimate.json || true
+  artifacts:
+    paths: [codeclimate.json]
+  except:
+    - master
+    
+test stage:
+  stage: test
+  image: netmile/adgame-build:latest
+  script:
+    - which aws
+    - ls -l ./
+    - pwd
+  except:
+    - master
+
+# build and deployment stage
+build and deploy to staging:
+  stage: build and deploy
+  environment: staging
+  image: netmile/adgame-build:latest
+  script:
+    - mvn -Dbranch=$CI_COMMIT_REF_NAME -P stg_properties clean compile war:war
+    - aws s3 cp ./target/adgms.war $STG_S3_WAR_FOLDER
+    - aws opsworks --region us-east-1 create-deployment --stack-id $STACK_ID --app-id $APP_ID --layer-ids $LAYER_ID --command "{\"Name\":\"deploy\"}" --comment "$CI_COMMIT_REF_NAME"
+  when: manual
+  only:
+    - /^f_*/
+    - dev
+
+build and deploy to production:
+  stage: build and deploy
+  environment: production
+  image: netmile/adgame-build:latest
+  script:
+    - mvn -Dbranch=$CI_COMMIT_REF_NAME -P prod_properties clean compile war:war
+    - aws s3 cp ./target/adgms.war $PROD_S3_WAR_FOLDER
+    - aws opsworks --region us-east-1 create-deployment --stack-id $STACK_ID --app-id $APP_ID --layer-ids $LAYER_ID --command "{\"Name\":\"deploy\"}" --comment "$CI_COMMIT_REF_NAME"
+  when: manual
+  only:
+    - /^prod_.*/
