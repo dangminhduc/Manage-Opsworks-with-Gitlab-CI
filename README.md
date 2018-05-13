@@ -19,7 +19,7 @@ First, enable pipelines for the project
 In GitLab project panel, select Settings → Generals → Permissions→ Turn on [Pipelines] → Save changes
 ![alt text](https://i.imgur.com/sN2u5iy.png)
 ![alt text](https://i.imgur.com/GmKHrsz.png)
-Then, create CI settings file under project's root folder. Below is the sample file for rails application deployment
+Then, create CI settings file (.gitlab-ci.yml) under project's root folder. Below is the sample file for rails application deployment.
 
 ```
 stages:
