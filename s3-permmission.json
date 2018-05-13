@@ -1,0 +1,29 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Stmt1434613487000",
+            "Effect": "Allow",
+            "Action": [
+                "s3:*"
+            ],
+            "Resource": [
+                "arn:aws:s3:::java-app",
+                "arn:aws:s3:::java-app/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": "s3:ListAllMyBuckets",
+            "Resource": "*"
+        },
+         {
+            "Sid": "Stmt1413336234000",
+            "Effect": "Allow",
+            "Action": "opsworks:CreateDeployment",
+            "Resource": [
+                *your layer ID's arn goes here*
+            ]
+        }
+    ]
+}
