@@ -1,0 +1,86 @@
+stages:
+  - code-review
+  - test
+  - deploy
+
+variables:
+  # You may put it in gitlab secrete variables 
+  APP_NAME: "xxxxxxxx" #Staging application name from Opsworks console
+  #STG parameter
+  STG_STACK_ID: "xxxxxxxxx" #Staging stack ID from Opsworks console
+  STG_LAYER_ID: "xxxxxxxxxxxx" #Staging layer ID
+  STG_APP_ID : "xxxxxxxxx" #Staging application ID from Opsworks console
+  
+  #PROD parameter
+  PROD_STACK_ID: "xxxxxxxxx" #Production stack ID from Opsworks console
+  PROD_LAYER_ID: "xxxxxxxxxxxx" #Production layer ID
+  PROD_APP_ID : "xxxxxxxxx" #Production application ID from Opsworks console
+
+code review:
+  image: docker:latest
+  stage: code-review
+  variables:
+    DOCKER_DRIVER: overlay
+  services:
+    - docker:dind
+  script:
+    - docker info
+    - docker pull codeclimate/codeclimate
+    - docker run --env CODECLIMATE_CODE="$PWD" --volume "$PWD":/code --volume /var/run/docker.sock:/var/run/docker.sock --volume /tmp/cc:/tmp/cc codeclimate/codeclimate:0.69.0 init
+    - docker run --env CODECLIMATE_CODE="$PWD" --volume "$PWD":/code --volume /var/run/docker.sock:/var/run/docker.sock --volume /tmp/cc:/tmp/cc codeclimate/codeclimate:0.69.0 analyze -f json > codeclimate.json || true
+  artifacts:
+    paths: [codeclimate.json]
+  except:
+    - master
+
+test_job: 
+  stage: test
+  image: netmile/adgame-build:latest #This image includes maven and aws-cli
+  script:
+    - which aws
+    - ls -l ./
+    - pwd
+  except:
+    - master
+
+deploy to staging with no migration:
+  stage: deploy
+  image: netmile/adgame-build:latest 
+  environment: staging
+  script:
+    - aws opsworks --region us-east-1 create-deployment --stack-id $STACK_ID --app-id $APP_ID --layer-ids $LAYER_ID --command "{\"Name\":\"deploy\"}" --custom-json "{\"deploy\":{\"$APP_NAME\":{\"scm\":{\"revision\":\"$CI_COMMIT_REF_NAME\"}}}}" --comment "$CI_COMMIT_REF_NAME"
+  when: manual
+  only:
+    - /^f_*/ #future branch must have "f_" prefix
+    - dev
+
+deploy to staging with migration:
+  stage: deploy
+  image: netmile/adgame-build:latest
+  environment: adgame_admin_staging
+  script:
+    - aws opsworks --region us-east-1 create-deployment --stack-id $STACK_ID --app-id $APP_ID --layer-ids $LAYER_ID --command "{\"Name\":\"deploy\"}" --custom-json "{\"deploy\":{\"$APP_NAME\":{\"scm\":{\"revision\":\"$CI_COMMIT_REF_NAME\"},\"migrate\":true}}}" --comment "$CI_COMMIT_REF_NAME"
+  when: manual
+  only:
+    - /^f_*/
+    - dev
+
+deploy to production with no migration:
+  stage: deploy
+  image: netmile/adgame-build:latest
+  environment: adgame_admin_production
+  script:
+    - aws opsworks --region us-east-1 create-deployment --stack-id $STACK_ID --app-id $APP_ID --layer-ids $LAYER_ID --command "{\"Name\":\"deploy\"}" --custom-json "{\"deploy\":{\"$APP_NAME\":{\"scm\":{\"revision\":\"$CI_COMMIT_REF_NAME\"}}}}" --comment "$CI_COMMIT_REF_NAME"
+  when: manual
+  only:
+    - /^prod_*/  #release tag must have "prod_" prefix
+
+deploy to production with migration:
+  stage: deploy
+  image: netmile/adgame-build:latest
+  environment: adgame_admin_production
+  script:
+    - aws opsworks --region us-east-1 create-deployment --stack-id $STACK_ID --app-id $APP_ID --layer-ids $LAYER_ID --command "{\"Name\":\"deploy\"}" --custom-json "{\"deploy\":{\"$APP_NAME\":{\"scm\":{\"revision\":\"$CI_COMMIT_REF_NAME\"},\"migrate\":true}}}" --comment "$CI_COMMIT_REF_NAME"
+  when: manual
+  only:
+    - /^prod_*/
