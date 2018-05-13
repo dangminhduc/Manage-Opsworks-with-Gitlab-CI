@@ -5,6 +5,7 @@ Before this, after pushing a commit to Gitlab, our developer need to login into 
 First of all, the architecture.
 ![alt text](https://i.imgur.com/L2hpsDC.png)
 Generally, our architecture is divide into 3 major steps:
+
 Step 1: Developer push a commit or make a merge request into Gitlab
 Step 2: The pipeline is contains 3 small step
 
