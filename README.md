@@ -233,5 +233,51 @@ In Gitlab runner server, run this command below
 sudo gitlab-runner register -n --url http://<gitlab server URL> --registration-token [registration token goes here] --executor docker --description “docker-in-docker” --docker-image "docker:latest" --docker-volumes /var/run/docker.sock:/var/run/docker.sock
 ```
 
-That's all, now push a commit with a appropriate branch's name, go to CI/CD section and make your first deployment.
+Now push a commit with a appropriate branch's name, go to CI/CD section and make your first deployment.
 ![alt text](https://i.imgur.com/BGvN8xf.png)
+For the notification to Slack channel, we have 2 choice. 
+
+1. We can use Lambda function with a CloudWatch event to trigger it like a normal crontab. This have a downside. The minimum setup in CloudWatch event is 60 seconds, so you can only run the job once in a minute. The bright side is, of course, you don't have to manage any server at all, just put the source code into Lambda and config it right and you good to go
+2. If you want to monitor opsworks deployment more precisely (for example every 10 seconds), you can launch a EC2 instance and config a crontab inside. (Just remember, if you call the aws api too many time in a period of time, you may get response exception, so choose the crontab frequent above 10 seconds)
+
+I will go with option 1 because it easy to config and this notification part is not production critical. 
+In Lambda console, create a new function.
+![alt text](https://i.imgur.com/z2R3tc2.png)
+The function must have appropriate role. In securities credentials console, create a role with json file below.
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "arn:aws:logs:*:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "opsworks:Describe*"
+            ],
+            "Resource": [
+                "*"
+            ]
+        }
+    ]
+}
+```
+
+After creating Lambda function, copy the file OpsworkDeploymentCheck.js to the code IDE. 
+Then, we need to config function basic settings.
+![alt text](https://imgur.com/AeoQPmX.png)
+With 128MB of memory, it will take several seconds for the function to complete, so we need to change function timeout from 3 seconds (default) to 30 secs or something below 1 min.
+
+In CloudWatch console, create an event rule that run every minute to trigger the Lambda function.
+![alt text](https://imgur.com/6ksjI5z.png)
+In targets configuration, choose the lambda function that we have created above.
+That's all. Every time when a deployment occur in opsworks, there will be a message sent to slack channel.
+![alt text](https://imgur.com/VTGkHlz.png)
